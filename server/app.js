@@ -61,7 +61,7 @@ export function createApp({ provider = providerFromEnv(), tools, fetchImpl } = {
       send({ type: 'done' });
     } catch (e) {
       console.error('[chat] error:', e.message);
-      send({ type: 'error', text: 'AI se baat nahi ho payi, thodi der baad try karo.' });
+      send({ type: 'error', text: 'Abhi saare AI servers busy hain 🙏 1 minute baad dobara bhejo.' });
     }
     res.end();
   });
