@@ -3,6 +3,8 @@ import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { config } from './config.js';
+import { searchKB } from './kb.js';
+import { generate_image, generate_logo, generate_music } from './media.js';
 
 const strip = html => html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ')
   .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
@@ -68,9 +70,18 @@ export async function create_file({ filename, content }, ctx) {
   return `File ban gayi: ${url}`;
 }
 
-export const tools = { web_search, fetch_url, run_code, create_file };
+export async function search_knowledge({ query }) {
+  const r = await searchKB(String(query || ''));
+  return r.length ? r : 'KB mein is baare mein kuch nahi mila.';
+}
+
+export const tools = { search_knowledge, web_search, fetch_url, run_code, create_file, generate_image, generate_logo, generate_music };
 export const toolDocs = `
+- search_knowledge {"query": string} : samaj knowledge base mein dhundo (samaj ke sawaal pe SABSE PEHLE)
 - web_search {"query": string} : internet pe search
 - fetch_url {"url": string} : webpage ka text padho
 - run_code {"language": "javascript"|"python", "code": string} : code chalao (no network, 10s limit), print/console.log se output
-- create_file {"filename": string, "content": string} : user ke download ke liye file banao`;
+- create_file {"filename": string, "content": string} : user ke download ke liye file banao
+- generate_image {"prompt": string (English mein)} : image banao
+- generate_logo {"name": string, "idea": string, "variants": 2-4} : logo designs banao
+- generate_music {"prompt": string, "seconds": number<=15} : chhota instrumental music banao`;

@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import Admin from './Admin.jsx';
 
 const sid = localStorage.sid || (localStorage.sid = crypto.randomUUID());
 const Avatar = () => <div className="w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-cyan-400 to-violet-600 grid place-items-center text-lg">🤖</div>;
-const toolLabel = { web_search: '🔎 Search kar raha hu', fetch_url: '🌐 Page padh raha hu', run_code: '💻 Code chala raha hu', create_file: '📄 File bana raha hu' };
+const toolLabel = { web_search: '🔎 Search kar raha hu', fetch_url: '🌐 Page padh raha hu', run_code: '💻 Code chala raha hu', create_file: '📄 File bana raha hu', search_knowledge: '📚 Samaj KB dekh raha hu', generate_image: '🎨 Image bana raha hu', generate_logo: '✏️ Logo bana raha hu', generate_music: '🎵 Music bana raha hu' };
 
 export default function App() {
+  return location.pathname.startsWith('/admin') ? <Admin /> : <Chat />;
+}
+
+function Chat() {
   const [info, setInfo] = useState({ name: 'Aditya Solanki AI', developer: 'Aditya Solanki', greeting: '' });
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState('');
@@ -16,7 +21,7 @@ export default function App() {
   async function send() {
     const text = input.trim(); if (!text || busy) return;
     const history = [...msgs, { role: 'user', content: text }];
-    setMsgs([...history, { role: 'assistant', content: '', steps: [], files: [] }]); setInput(''); setBusy(true);
+    setMsgs([...history, { role: 'assistant', content: '', steps: [], files: [], media: [] }]); setInput(''); setBusy(true);
     const upd = f => setMsgs(m => { const c = [...m]; c[c.length - 1] = f({ ...c[c.length - 1] }); return c; });
     try {
       const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: sid, messages: history.map(({ role, content }) => ({ role, content })) }) });
@@ -30,6 +35,7 @@ export default function App() {
           if (!p.startsWith('data: ')) continue; const e = JSON.parse(p.slice(6));
           if (e.type === 'step') upd(a => ({ ...a, steps: [...a.steps, { tool: e.tool, args: e.args, done: false }] }));
           if (e.type === 'step_done') upd(a => ({ ...a, steps: a.steps.map((s, i) => i === a.steps.length - 1 ? { ...s, done: true } : s) }));
+          if (e.type === 'media') upd(a => ({ ...a, media: [...a.media, e] }));
           if (e.type === 'file') upd(a => ({ ...a, files: [...a.files, e] }));
           if (e.type === 'delta') upd(a => ({ ...a, content: a.content + e.text }));
           if (e.type === 'error') upd(a => ({ ...a, content: '⚠️ ' + e.text }));
@@ -48,7 +54,7 @@ export default function App() {
       <main className="flex-1 overflow-y-auto p-3 space-y-3">
         <Bubble ai text={info.greeting || `Namaste 🙏 Main ${info.name}, aapki kya help kar sakta hu?`} />
         {info.keyConfigured === false && <div className="text-xs text-amber-300 bg-amber-900/30 p-2 rounded">⚠️ API key missing — server pe GEMINI_API_KEY set karni hai.</div>}
-        {msgs.map((m, i) => <Bubble key={i} ai={m.role === 'assistant'} text={m.content} steps={m.steps} files={m.files} typing={busy && i === msgs.length - 1} />)}
+        {msgs.map((m, i) => <Bubble key={i} ai={m.role === 'assistant'} text={m.content} steps={m.steps} files={m.files} media={m.media} typing={busy && i === msgs.length - 1} />)}
         <div ref={end} />
       </main>
       <form onSubmit={e => { e.preventDefault(); send(); }} className="p-3 flex gap-2 border-t border-slate-800">
@@ -60,7 +66,7 @@ export default function App() {
   );
 }
 
-function Bubble({ ai, text, steps = [], files = [], typing }) {
+function Bubble({ ai, text, steps = [], files = [], media = [], typing }) {
   return (
     <div className={`flex gap-2 ${ai ? '' : 'justify-end'}`}>
       {ai && <Avatar />}
@@ -70,6 +76,7 @@ function Bubble({ ai, text, steps = [], files = [], typing }) {
           {steps.map((s, i) => <div key={i}>{s.done ? '✅' : '⏳'} {toolLabel[s.tool] || s.tool}{s.args?.query ? `: ${s.args.query}` : s.args?.url ? `: ${s.args.url}` : ''}</div>)}
         </div>}
         {text || (typing && <span className="animate-pulse">...</span>)}
+        {media.map(m => <div key={m.url} className="mt-2">{m.kind === 'image' ? <img src={m.url} alt={m.name} className="rounded-lg w-full" /> : <audio controls src={m.url} className="w-full" />}<a href={m.url} download className="text-xs text-cyan-300 underline">⬇️ Download</a></div>)}
         {files.map(f => <a key={f.url} href={f.url} className="block mt-2 text-cyan-300 underline">⬇️ {f.name}</a>)}
       </div>
     </div>

@@ -6,6 +6,8 @@ export const config = {
   port: Number(process.env.PORT) || 3000,
   maxSteps: 8,
   codeTimeoutMs: 10000,
+  imageDailyLimit: Number(process.env.IMAGE_DAILY_LIMIT) || 20,
+  musicDailyLimit: Number(process.env.MUSIC_DAILY_LIMIT) || 5,
   rateLimit: { windowMs: 60_000, max: 20 },
   filesDir: process.env.FILES_DIR || new URL('../data/files/', import.meta.url).pathname,
 };

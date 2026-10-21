@@ -29,3 +29,13 @@ Docker web service banao, env mein `GEMINI_API_KEY` daalo. Dockerfile ready hai.
 - Code sandbox: temp folder, 10s timeout, network band (`unshare -n`), JS ko sirf apne folder ka access.
 - Har IP: 20 msg/minute. Keys logs mein kabhi print nahi hoti.
 - Note: Render pe `unshare` allow na ho toh network block nahi hoga — public launch se pehle proper sandbox (container) lagana.
+
+## Samaj Knowledge Base (Shree Sant Shiromani Rohidas Vanshi Vadhiyara Chamar Samaj, Mumbai Sthanik Panchayats 1-28)
+- Docs `knowledge/` folder mein (.md/.txt). Abhi sirf placeholder README hai — koi samaj fact nahi.
+- `ADMIN_PASSWORD` env set karo, phir `/admin` kholo: add / edit / delete / upload.
+- AI samaj sawaal pe pehle KB search (BM25) karta hai, `[Source: doc.md]` cite karta hai, KB mein na ho toh saaf bolta hai — apne se facts nahi banata.
+- Note: Render free pe disk temporary hai; permanent docs ke liye unhe git mein `knowledge/` mein commit karo.
+
+## Image / Logo / Music
+- Image + logo (2-4 variants): Pollinations.ai, key nahi chahiye. Limit: `IMAGE_DAILY_LIMIT` (default 20/IP/din). Unsafe prompts refuse.
+- Music: Hugging Face MusicGen, `HF_TOKEN` chahiye (free: huggingface.co/settings/tokens). Na ho toh app bata deta hai. Limit `MUSIC_DAILY_LIMIT` (default 5).

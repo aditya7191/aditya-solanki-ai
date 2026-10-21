@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { APP_NAME, DEVELOPER, GREETING, config } from './config.js';
 import { runAgent } from './agent.js';
 import { providerFromEnv } from './providers.js';
+import { listDocs, saveDoc, deleteDoc } from './kb.js';
+import { timingSafeEqual } from 'node:crypto';
 
 export function rateLimiter({ windowMs, max }) {
   const hits = new Map();
@@ -18,10 +20,23 @@ export function rateLimiter({ windowMs, max }) {
   };
 }
 
-export function createApp({ provider = providerFromEnv(), tools } = {}) {
+export function createApp({ provider = providerFromEnv(), tools, fetchImpl } = {}) {
   const app = express();
   app.set('trust proxy', 1);
-  app.use(express.json({ limit: '200kb' }));
+  app.use(express.json({ limit: '2mb' }));
+  const admin = (req, res, next) => {
+    const want = process.env.ADMIN_PASSWORD, got = String(req.get('x-admin-password') || '');
+    if (!want) return res.status(503).json({ error: 'ADMIN_PASSWORD set nahi hai' });
+    const a = Buffer.from(got), b = Buffer.from(want);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return res.status(401).json({ error: 'Galat password' });
+    next();
+  };
+  app.get('/api/admin/docs', rateLimiter(config.rateLimit), admin, async (_q, r) => r.json(await listDocs()));
+  app.post('/api/admin/docs', rateLimiter(config.rateLimit), admin, async (q, r) => {
+    if (!q.body?.name || typeof q.body.content !== 'string') return r.status(400).json({ error: 'name aur content chahiye' });
+    r.json({ name: await saveDoc(q.body.name, q.body.content) });
+  });
+  app.delete('/api/admin/docs/:name', rateLimiter(config.rateLimit), admin, async (q, r) => { try { await deleteDoc(q.params.name); r.json({ ok: true }); } catch { r.status(404).end(); } });
   app.get('/api/health', (_q, r) => r.json({ ok: true }));
   app.get('/api/info', (_q, r) => r.json({ name: APP_NAME, developer: DEVELOPER, greeting: GREETING, keyConfigured: !!provider }));
   app.get('/api/files/:sid/:name', (req, res) => {
@@ -38,7 +53,7 @@ export function createApp({ provider = providerFromEnv(), tools } = {}) {
     const send = e => res.write(`data: ${JSON.stringify(e)}\n\n`);
     if (!provider) { send({ type: 'error', text: 'API key missing: server pe GEMINI_API_KEY set nahi hai. README dekho (free key aistudio.google.com se).' }); return res.end(); }
     try {
-      await runAgent({ provider, history, sessionId, tools, onEvent: e => {
+      await runAgent({ provider, history, sessionId, tools, ip: req.ip, fetchImpl, onEvent: e => {
         if (e.type !== 'answer') return send(e);
         // jawab ko tukdon mein stream karo
         for (const chunk of e.text.match(/[\s\S]{1,40}/g) || ['']) send({ type: 'delta', text: chunk });
