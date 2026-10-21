@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Admin from './Admin.jsx';
+import Markdown from './Markdown.jsx';
 
 const sid = localStorage.sid || (localStorage.sid = crypto.randomUUID());
 const Avatar = () => <div className="w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-cyan-400 to-violet-600 grid place-items-center text-lg">🤖</div>;
@@ -70,12 +71,12 @@ function Bubble({ ai, text, steps = [], files = [], media = [], typing }) {
   return (
     <div className={`flex gap-2 ${ai ? '' : 'justify-end'}`}>
       {ai && <Avatar />}
-      <div className={`max-w-[80%] rounded-2xl px-3 py-2 whitespace-pre-wrap break-words ${ai ? 'bg-slate-800' : 'bg-violet-600'}`}>
+      <div className={`max-w-[80%] rounded-2xl px-3 py-2 break-words ${ai ? '' : 'whitespace-pre-wrap '}${ai ? 'bg-slate-800' : 'bg-violet-600'}`}>
         {steps.length > 0 && <div className="mb-2 text-xs text-cyan-300 space-y-1 border-l-2 border-cyan-700 pl-2">
           <div className="font-semibold">⚙️ Kaam ho raha hai...</div>
           {steps.map((s, i) => <div key={i}>{s.done ? '✅' : '⏳'} {toolLabel[s.tool] || s.tool}{s.args?.query ? `: ${s.args.query}` : s.args?.url ? `: ${s.args.url}` : ''}</div>)}
         </div>}
-        {text || (typing && <span className="animate-pulse">...</span>)}
+        {text ? (ai ? <Markdown text={text} /> : text) : (typing && <span className="animate-pulse">...</span>)}
         {media.map(m => <div key={m.url} className="mt-2">{m.kind === 'image' ? <img src={m.url} alt={m.name} className="rounded-lg w-full" /> : <audio controls src={m.url} className="w-full" />}<a href={m.url} download className="text-xs text-cyan-300 underline">⬇️ Download</a></div>)}
         {files.map(f => <a key={f.url} href={f.url} className="block mt-2 text-cyan-300 underline">⬇️ {f.name}</a>)}
       </div>
