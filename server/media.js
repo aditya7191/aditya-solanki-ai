@@ -18,7 +18,13 @@ async function save(ctx, name, buf) {
   return `/api/files/${ctx.sessionId}/${name}`;
 }
 
-async function pollinate(prompt, ctx, seed) {
+async function pollinate(prompt, ctx, seed, tries = 3) {
+  for (let i = 1; ; i++) {
+    try { return await pollinateOnce(prompt, ctx, seed); }
+    catch (e) { if (i >= tries) throw e; await new Promise(r => setTimeout(r, (ctx.retryDelayMs ?? 3000) * i)); }
+  }
+}
+async function pollinateOnce(prompt, ctx, seed) {
   const f = ctx.fetch || fetch;
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=768&height=768&nologo=true&seed=${seed}`;
   const r = await f(url, { signal: AbortSignal.timeout(90000) });
@@ -54,10 +60,13 @@ export async function generate_logo({ name, idea = '', variants = 3 }, ctx) {
   const urls = [];
   for (let i = 0; i < n; i++) {
     const seed = Math.floor(Math.random() * 1e6), file = `logo-${i + 1}-${seed}.jpg`;
-    const url = await save(ctx, file, await pollinate(`${LOGO_STYLES[i]}, brand name ${base}, text "${name}", professional logo design`, ctx, seed));
-    ctx.onMedia?.({ kind: 'image', url, name: file }); urls.push(url);
+    try {
+      const url = await save(ctx, file, await pollinate(`${LOGO_STYLES[i]}, brand name ${base}, text "${name}", professional logo design`, ctx, seed));
+      ctx.onMedia?.({ kind: 'image', url, name: file }); urls.push(url);
+    } catch (e) { console.warn('[logo] variant failed:', e.message); }
   }
-  return `${n} logo variants ban gaye: ${urls.join(', ')}`;
+  if (!urls.length) return 'Error: image service abhi busy hai, logo nahi ban paye. User ko baad mein try karne bolo.';
+  return `${urls.length}/${n} logo variants ban gaye aur user ko screen pe dikh rahe hain: ${urls.join(', ')}. Inhe dobara mat banao.`;
 }
 
 export async function generate_music({ prompt, seconds = 10 }, ctx) {

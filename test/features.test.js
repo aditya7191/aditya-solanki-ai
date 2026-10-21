@@ -74,6 +74,19 @@ test('generate_logo: 2-4 variants clamp, distinct styles', async () => {
   }
 });
 
+test('pollinations retries 503 then succeeds; logo keeps partial results', async () => {
+  let n = 0; const ok = imgFetch();
+  const flaky = async (u, o) => (++n === 1 ? new Response('busy', { status: 503 }) : ok(u, o));
+  const media = [];
+  assert.match(await generate_image({ prompt: 'x' }, { sessionId: 's', ip: 'r', fetch: flaky, retryDelayMs: 0, onMedia: m => media.push(m) }), /ban gayi/);
+  assert.equal(n, 2);
+  let k = 0; const half = async (u, o) => (++k > 3 ? ok(u, o) : new Response('', { status: 503 }));
+  const r = await generate_logo({ name: 'A', variants: 2 }, { sessionId: 's', ip: 'r2', fetch: half, retryDelayMs: 0 });
+  assert.match(r, /1\/2 logo/);
+  const dead = async () => new Response('', { status: 503 });
+  assert.match(await generate_logo({ name: 'A', variants: 2 }, { sessionId: 's', ip: 'r3', fetch: dead, retryDelayMs: 0 }), /busy/);
+});
+
 test('generate_music: graceful without HF_TOKEN', async () => {
   assert.match(await generate_music({ prompt: 'dhol' }, { sessionId: 's', env: {} }), /HF_TOKEN set nahi/);
 });

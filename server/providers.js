@@ -1,22 +1,27 @@
 // Provider abstraction: har provider ka ek hi interface -> chat(messages) => text
 // messages: [{role:'system'|'user'|'assistant', content}]
 async function postJSON(url, body, headers = {}) {
-  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) });
+  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`${r.status} ${data?.error?.message || 'provider error'}`);
   return data;
 }
 
-export function geminiProvider(key, model = process.env.GEMINI_MODEL || 'gemini-2.0-flash') {
+export const DEFAULT_GEMINI_MODELS = 'gemini-3.5-flash,gemini-flash-lite-latest,gemini-3.8-flash';
+export function geminiProvider(key, models = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODELS) {
+  const list = String(models).split(',').map(m => m.trim()).filter(Boolean);
+  return fallbackProvider(list.map(m => geminiModel(key, m)));
+}
+function geminiModel(key, model) {
   return {
-    name: 'gemini',
+    name: 'gemini:' + model,
     async chat(messages) {
       const system = messages.filter(m => m.role === 'system').map(m => m.content).join('\n');
       const contents = messages.filter(m => m.role !== 'system').map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
       // key header mein jaati hai, URL/log mein nahi
       const d = await postJSON(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         { systemInstruction: { parts: [{ text: system }] }, contents }, { 'x-goog-api-key': key });
-      return d?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+      return d?.candidates?.[0]?.content?.parts?.map(p => (p.thought ? '' : p.text || '')).join('') || '';
     },
   };
 }
