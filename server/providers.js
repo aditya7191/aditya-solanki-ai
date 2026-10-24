@@ -19,7 +19,7 @@ export function geminiProvider(key, models = process.env.GEMINI_MODEL || DEFAULT
 export function withRetry(p, { tries = 2, baseMs = 800 } = {}) {
   return { name: p.name, async chat(messages, opts) {
     for (let i = 1; ; i++) {
-      try { return await p.chat(messages, opts); }
+      try { const out = await p.chat(messages, opts); if (opts?.meta && !opts.meta.by) opts.meta.by = p.name; return out; }
       catch (e) { if (i >= tries || !e.status || !retryable(e) || opts?.signal?.aborted) throw e; await new Promise(r => setTimeout(r, baseMs * i)); }
     }
   } };
@@ -69,14 +69,15 @@ export function pollinationsTextProvider(model = process.env.POLLINATIONS_TEXT_M
 export function hedgedProvider(primary, backup, hedgeMs = Number(process.env.HEDGE_MS) || 9000) {
   return {
     name: `${primary.name}|${backup.name}`,
-    chat(messages) {
+    chat(messages, opts = {}) {
+      const pm = {}, bm = {};
       return new Promise((resolve, reject) => {
         const ac = new AbortController(); let done = false, backupStarted = false, fails = 0, lastErr;
-        const win = r => { if (done) return; done = true; clearTimeout(t); ac.abort(); resolve(r); };
+        const win = (meta) => r => { if (done) return; done = true; if (opts.meta) opts.meta.by = meta.by; clearTimeout(t); ac.abort(); resolve(r); };
         const lose = e => { lastErr = e; if (++fails >= 2 && !done) { done = true; reject(lastErr); } else startBackup(); };
-        const startBackup = () => { if (backupStarted || done) return; backupStarted = true; backup.chat(messages, { signal: ac.signal }).then(win, lose); };
+        const startBackup = () => { if (backupStarted || done) return; backupStarted = true; backup.chat(messages, { signal: ac.signal, meta: bm }).then(win(bm), lose); };
         const t = setTimeout(startBackup, hedgeMs);
-        primary.chat(messages, { signal: ac.signal }).then(win, lose);
+        primary.chat(messages, { signal: ac.signal, meta: pm }).then(win(pm), lose);
       });
     },
   };
@@ -95,7 +96,7 @@ export function fallbackProvider(list) {
       let last;
       for (const p of list) {
         if (opts?.signal?.aborted) break;
-        try { return await p.chat(messages, opts); } catch (e) { last = e; if (!opts?.signal?.aborted) console.warn(`[provider] ${p.name} failed: ${String(e.message).slice(0, 120)}`); }
+        try { const out = await p.chat(messages, opts); if (opts?.meta && !opts.meta.by) opts.meta.by = p.name; return out; } catch (e) { last = e; if (!opts?.signal?.aborted) console.warn(`[provider] ${p.name} failed: ${String(e.message).slice(0, 120)}`); }
       }
       throw last;
     },

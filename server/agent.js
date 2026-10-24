@@ -1,6 +1,7 @@
 import { APP_NAME, DEVELOPER, config } from './config.js';
 import { tools as defaultTools, toolDocs } from './tools.js';
 import { SAMAJ } from './kb.js';
+import { conversationLanguage, LANGS, hasScript } from './lang.js';
 
 export const systemPrompt = () => `Tum "${APP_NAME}" ho, ek AI assistant (developer: ${DEVELOPER}). Tum AI ho, insaan nahi — yeh kabhi mat chhupao.
 User jis bhasha mein likhe (Hindi, English, Hinglish) usi mein jawab do.
@@ -19,12 +20,23 @@ export function parseTool(text) {
 
 // onEvent({type:'step'|'step_done'|'file'|'answer', ...})
 export async function runAgent({ provider, history, sessionId, ip, env, fetchImpl, onEvent = () => {}, tools = defaultTools, maxSteps = config.maxSteps }) {
-  const messages = [{ role: 'system', content: systemPrompt() }, ...history];
+  const lang = conversationLanguage(history);
+  const L = lang && LANGS[lang];
+  const messages = [{ role: 'system', content: systemPrompt() + (L ? `\n\nLANGUAGE (MANDATORY): ${L.rule}` : '') }, ...history];
+  // per-turn instruction last user message pe bhi (backups jo system prompt kam maante hain unke liye)
+  if (L) for (let i = messages.length - 1; i > 0; i--) if (messages[i].role === 'user') { messages[i] = { ...messages[i], content: `${messages[i].content}\n\n[Instruction: ${L.rule}]` }; break; }
+  if (lang) onEvent({ type: 'lang', lang });
   const ctx = { sessionId, ip, env, fetch: fetchImpl, onFile: f => onEvent({ type: 'file', ...f }), onMedia: m => onEvent({ type: 'media', ...m }) };
   for (let i = 0; i < maxSteps; i++) {
-    const reply = await provider.chat(messages);
+    let meta = {};
+    let reply = await provider.chat(messages, { meta });
     const call = parseTool(reply);
-    if (!call) { onEvent({ type: 'answer', text: reply }); return reply; }
+    if (!call && L && !hasScript(lang, reply)) {
+      // light post-check: galat script aaya toh ek baar strict retry
+      const strict = [...messages, { role: 'assistant', content: reply }, { role: 'user', content: `Your reply was not in ${L.name}. Rewrite the SAME answer fully in ${L.name} (${L.native}) script only. ${L.rule}` }];
+      try { const m2 = {}; const r2 = await provider.chat(strict, { meta: m2 }); if (hasScript(lang, r2) && !parseTool(r2)) { reply = r2; meta = { by: (m2.by || '?') + ' (strict retry)' }; } } catch {}
+    }
+    if (!call) { onEvent({ type: 'answer', text: reply, provider: meta.by }); return reply; }
     messages.push({ role: 'assistant', content: reply });
     let result;
     if (!tools[call.name]) result = `Error: tool "${call.name}" nahi hai`;

@@ -52,13 +52,16 @@ export function createApp({ provider = providerFromEnv(), tools, fetchImpl } = {
     res.set({ 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
     const send = e => res.write(`data: ${JSON.stringify(e)}\n\n`);
     if (!provider) { send({ type: 'error', text: 'API key missing: server pe GEMINI_API_KEY set nahi hai. README dekho (free key aistudio.google.com se).' }); return res.end(); }
+    let lastBy;
     try {
       await runAgent({ provider, history, sessionId, tools, ip: req.ip, fetchImpl, onEvent: e => {
+        if (e.provider) lastBy = e.provider;
         if (e.type !== 'answer') return send(e);
+        if (e.provider) console.log(`[chat] answered by ${e.provider}`);
         // jawab ko tukdon mein stream karo
         for (const chunk of e.text.match(/[\s\S]{1,40}/g) || ['']) send({ type: 'delta', text: chunk });
       } });
-      send({ type: 'done' });
+      send({ type: 'done', provider: lastBy });
     } catch (e) {
       console.error('[chat] error:', e.message);
       send({ type: 'error', text: 'Abhi saare AI servers busy hain 🙏 1 minute baad dobara bhejo.' });
