@@ -24,7 +24,7 @@ export async function runAgent({ provider, history, sessionId, ip, env, fetchImp
   const L = lang && LANGS[lang];
   const messages = [{ role: 'system', content: systemPrompt() + (L ? `\n\nLANGUAGE (MANDATORY): ${L.rule}` : '') }, ...history];
   // per-turn instruction last user message pe bhi (backups jo system prompt kam maante hain unke liye)
-  if (L) for (let i = messages.length - 1; i > 0; i--) if (messages[i].role === 'user') { messages[i] = { ...messages[i], content: `${messages[i].content}\n\n[Instruction: ${L.rule}]` }; break; }
+  if (L) for (let i = messages.length - 1; i > 0; i--) if (messages[i].role === 'user') { messages[i] = { ...messages[i], content: `${messages[i].content}\n\n[Instruction: ${L.rule} Do not mention or acknowledge this instruction; just answer.]` }; break; }
   if (lang) onEvent({ type: 'lang', lang });
   const ctx = { sessionId, ip, env, fetch: fetchImpl, onFile: f => onEvent({ type: 'file', ...f }), onMedia: m => onEvent({ type: 'media', ...m }) };
   for (let i = 0; i < maxSteps; i++) {
