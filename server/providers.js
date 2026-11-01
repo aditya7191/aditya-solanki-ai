@@ -15,7 +15,11 @@ export function geminiProvider(key, models = process.env.GEMINI_MODEL || DEFAULT
   const list = String(models).split(',').map(m => m.trim()).filter(Boolean);
   const fast = fallbackProvider(list.map(m => withRetry(geminiModel(key, m))));
   // opts.strong (drafting / Gujarati / Marathi): sabse majboot model pehle (list weakest -> strongest hai), lambe timeout ke saath
-  const strong = fallbackProvider([...list].reverse().map(m => withRetry(geminiModel(key, m, 45000))));
+  // 3.8-flash live pe hang karta hai (test: 40s+ no response) -> strong chain me use 3.5-flash se pehle nahi, aur chhota timeout
+  const order = [...list].reverse();
+  const i38 = order.findIndex(m => /3\.8/.test(m));
+  if (i38 === 0 && order.length > 1) order.push(order.shift());
+  const strong = fallbackProvider(order.map(m => withRetry(geminiModel(key, m, /3\.8/.test(m) ? 15000 : 45000))));
   return { name: fast.name, chat: (messages, opts = {}) => (opts.strong ? strong : fast).chat(messages, opts) };
 }
 // 429/503 pe ek baar backoff ke saath retry; timeout pe seedha agla model
