@@ -13,7 +13,10 @@ async function postJSON(url, body, headers = {}, timeoutMs = 25000, signal) {
 export const DEFAULT_GEMINI_MODELS = 'gemini-3.5-flash-lite,gemini-flash-lite-latest,gemini-3.5-flash,gemini-3.8-flash';
 export function geminiProvider(key, models = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODELS) {
   const list = String(models).split(',').map(m => m.trim()).filter(Boolean);
-  return fallbackProvider(list.map(m => withRetry(geminiModel(key, m))));
+  const fast = fallbackProvider(list.map(m => withRetry(geminiModel(key, m))));
+  // opts.strong (drafting / Gujarati / Marathi): sabse majboot model pehle (list weakest -> strongest hai), lambe timeout ke saath
+  const strong = fallbackProvider([...list].reverse().map(m => withRetry(geminiModel(key, m, 45000))));
+  return { name: fast.name, chat: (messages, opts = {}) => (opts.strong ? strong : fast).chat(messages, opts) };
 }
 // 429/503 pe ek baar backoff ke saath retry; timeout pe seedha agla model
 export function withRetry(p, { tries = 2, baseMs = 800 } = {}) {
@@ -24,7 +27,8 @@ export function withRetry(p, { tries = 2, baseMs = 800 } = {}) {
     }
   } };
 }
-function geminiModel(key, model) {
+export const MAX_OUT_TOKENS = 8192;
+function geminiModel(key, model, timeoutMs = 25000) {
   return {
     name: 'gemini:' + model,
     async chat(messages, opts = {}) {
@@ -32,7 +36,7 @@ function geminiModel(key, model) {
       const contents = messages.filter(m => m.role !== 'system').map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
       // key header mein jaati hai, URL/log mein nahi
       const d = await postJSON(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        { systemInstruction: { parts: [{ text: system }] }, contents }, { 'x-goog-api-key': key }, 25000, opts.signal);
+        { systemInstruction: { parts: [{ text: system }] }, contents, generationConfig: { maxOutputTokens: MAX_OUT_TOKENS } }, { 'x-goog-api-key': key }, timeoutMs, opts.signal);
       const out = d?.candidates?.[0]?.content?.parts?.map(p => (p.thought ? '' : p.text || '')).join('') || '';
       if (!out.trim()) throw new ProviderError('empty reply', 502);
       return out;
@@ -44,7 +48,7 @@ export function groqProvider(key, model = process.env.GROQ_MODEL || 'llama-3.3-7
   return {
     name: 'groq',
     async chat(messages, opts = {}) {
-      const d = await postJSON('https://api.groq.com/openai/v1/chat/completions', { model, messages }, { authorization: `Bearer ${key}` }, 25000, opts.signal);
+      const d = await postJSON('https://api.groq.com/openai/v1/chat/completions', { model, messages, max_tokens: 8000 }, { authorization: `Bearer ${key}` }, 25000, opts.signal);
       const out = d?.choices?.[0]?.message?.content || '';
       if (!out.trim()) throw new ProviderError('empty reply', 502);
       return out;
@@ -57,7 +61,7 @@ export function pollinationsTextProvider(model = process.env.POLLINATIONS_TEXT_M
   return withRetry({
     name: 'pollinations-text',
     async chat(messages, opts = {}) {
-      const d = await postJSON('https://text.pollinations.ai/openai', { model, messages, private: true }, {}, 45000, opts.signal);
+      const d = await postJSON('https://text.pollinations.ai/openai', { model, messages, private: true, max_tokens: 6000 }, {}, 45000, opts.signal);
       const out = d?.choices?.[0]?.message?.content || '';
       if (!out.trim()) throw new ProviderError('empty reply', 502);
       return out;
@@ -75,9 +79,9 @@ export function hedgedProvider(primary, backup, hedgeMs = Number(process.env.HED
         const ac = new AbortController(); let done = false, backupStarted = false, fails = 0, lastErr;
         const win = (meta) => r => { if (done) return; done = true; if (opts.meta) opts.meta.by = meta.by; clearTimeout(t); ac.abort(); resolve(r); };
         const lose = e => { lastErr = e; if (++fails >= 2 && !done) { done = true; reject(lastErr); } else startBackup(); };
-        const startBackup = () => { if (backupStarted || done) return; backupStarted = true; backup.chat(messages, { signal: ac.signal, meta: bm }).then(win(bm), lose); };
-        const t = setTimeout(startBackup, hedgeMs);
-        primary.chat(messages, { signal: ac.signal, meta: pm }).then(win(pm), lose);
+        const startBackup = () => { if (backupStarted || done) return; backupStarted = true; backup.chat(messages, { signal: ac.signal, meta: bm, strong: opts.strong }).then(win(bm), lose); };
+        const t = setTimeout(startBackup, opts.hedgeMs || hedgeMs);
+        primary.chat(messages, { signal: ac.signal, meta: pm, strong: opts.strong }).then(win(pm), lose);
       });
     },
   };

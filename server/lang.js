@@ -38,3 +38,32 @@ export function conversationLanguage(history = []) {
   return lang;
 }
 export const hasScript = (lang, text) => lang === 'gu' ? /[\u0A80-\u0AFF]/.test(text) : (lang === 'hi' || lang === 'mr') ? /[\u0900-\u097F]/.test(text) : true;
+
+// ---- Quality self-check: galat script / Hindi mixing pakdo ----
+const HI_MARKERS = /(?:^|[\s,।.(])(है|हैं|हूँ|हूं|था|थे|और|नहीं|लिए|के लिए|के|को|से|में|आप|आपका|आपकी|आपके|हम|हमारा|हमारी|करें|कीजिए|सभी|होगा|होगी|रहें|रहेगा)(?=$|[\s,।.!?)])/g;
+const MR_MARKERS = /(आहे|आहेत|होते|होता|मध्ये|साठी|आणि|तुम्ही|आपण|कृपया|कळवि|करावे|नाही|आपली|आपले|आपला|आम्ही|यांना|यांच्या|मला|त्यांना|वेळी)/g;
+const HINGLISH = /\b(hai|hain|aap|aapka|aapki|kripya|kijiye|karein|hum|humare|hamare|mein|ko|ka|ki|ke|nahi|bahut|zaroor|aur|toh|yeh|woh|sabhi|aapko)\b/gi;
+const cnt = (t, re) => (t.match(re) || []).length;
+// null = theek; warna issue ka string
+export function langIssue(lang, text = '') {
+  const t = text.replace(/```[\s\S]*?```/g, '').replace(/\[Source:[^\]]*\]/g, '');
+  const gu = cnt(t, /[\u0A80-\u0AFF]/g), dev = cnt(t, /[\u0900-\u097F]/g), lat = cnt(t, /[A-Za-z]/g);
+  const words = (t.match(/\S+/g) || []).length;
+  if (lang === 'gu') {
+    if (!gu) return 'no Gujarati script';
+    if (dev > 0) return 'contains Devanagari/Hindi characters';
+    if (lat > gu * 0.5 && lat > 40) return 'too much Latin text';
+  } else if (lang === 'mr') {
+    if (!dev) return 'no Devanagari script';
+    if (gu > 0) return 'contains Gujarati script';
+    if (cnt(t, HI_MARKERS) >= 3 && cnt(t, HI_MARKERS) > cnt(t, MR_MARKERS)) return 'mixes Hindi words/grammar (है/का/की/के/में/और/आप...) into Marathi';
+    if (lat > dev * 0.5 && lat > 40) return 'too much Latin text';
+  } else if (lang === 'hi') {
+    if (!dev) return 'no Devanagari script';
+    if (gu > 0) return 'contains Gujarati script';
+  } else if (lang === 'en') {
+    if (gu + dev > 3) return 'contains non-English script';
+    if (words > 8 && cnt(t, HINGLISH) >= 4 && cnt(t, HINGLISH) / words > 0.04) return 'contains Hindi/Hinglish words';
+  }
+  return null;
+}

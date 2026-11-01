@@ -33,12 +33,12 @@ test('instruction goes to system + last user msg (every provider sees it)', asyn
 test('post-check: Hindi reply for Gujarati -> one strict retry', async () => {
   const p = mockProvider(['नमस्ते, दिवाली की शुभकामनाएं', 'દિવાળીની શુભકામનાઓ']);
   const out = await runAgent({ provider: p, history: [{ role: 'user', content: 'gujarati mein likho: Diwali ki shubhkamnaye' }], sessionId: 'l' });
-  assert.equal(out, 'દિવાળીની શુભકામનાઓ'); assert.equal(p.calls.length, 2); assert.match(p.calls[1].at(-1).content, /not in Gujarati/);
+  assert.equal(out, 'દિવાળીની શુભકામનાઓ'); assert.equal(p.calls.length, 2); assert.match(p.calls[1].at(-1).content, /language problem/);
 });
-test('post-check retry only once; keeps original if still wrong', async () => {
-  const p = mockProvider(['hindi 1', 'hindi 2', 'never']);
+test('post-check retries max twice; keeps original if still wrong', async () => {
+  const p = mockProvider(['hindi 1', 'hindi 2', 'hindi 3', 'never']);
   assert.equal(await runAgent({ provider: p, history: [{ role: 'user', content: 'ગુજરાતી માં જવાબ આપો' }], sessionId: 'l' }), 'hindi 1');
-  assert.equal(p.calls.length, 2);
+  assert.equal(p.calls.length, 3);
 });
 test('no retry when language not requested', async () => {
   const p = mockProvider(['ok']); await runAgent({ provider: p, history: [{ role: 'user', content: 'hi' }], sessionId: 'l' });

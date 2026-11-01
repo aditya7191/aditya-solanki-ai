@@ -7,6 +7,7 @@ import { runAgent } from './agent.js';
 import { providerFromEnv } from './providers.js';
 import { listDocs, saveDoc, deleteDoc } from './kb.js';
 import { timingSafeEqual } from 'node:crypto';
+import { cleanInput, makePdf, makeDocx, pdfToPng, DEFAULT_ORG } from './letter.js';
 
 export function rateLimiter({ windowMs, max }) {
   const hits = new Map();
@@ -23,7 +24,8 @@ export function rateLimiter({ windowMs, max }) {
 export function createApp({ provider = providerFromEnv(), tools, fetchImpl } = {}) {
   const app = express();
   app.set('trust proxy', 1);
-  app.use(express.json({ limit: '2mb' }));
+  const big = express.json({ limit: '12mb' }), small = express.json({ limit: '2mb' }); // big: letterhead image / PDF routes
+  app.use((q, r, n) => (q.path.startsWith('/api/letterhead') ? big : small)(q, r, n));
   const admin = (req, res, next) => {
     const want = process.env.ADMIN_PASSWORD, got = String(req.get('x-admin-password') || '');
     if (!want) return res.status(503).json({ error: 'ADMIN_PASSWORD set nahi hai' });
@@ -37,6 +39,20 @@ export function createApp({ provider = providerFromEnv(), tools, fetchImpl } = {
     r.json({ name: await saveDoc(q.body.name, q.body.content) });
   });
   app.delete('/api/admin/docs/:name', rateLimiter(config.rateLimit), admin, async (q, r) => { try { await deleteDoc(q.params.name); r.json({ ok: true }); } catch { r.status(404).end(); } });
+  app.get('/api/letterhead/defaults', (_q, r) => r.json(DEFAULT_ORG));
+  app.post('/api/letterhead/export', rateLimiter({ windowMs: 60_000, max: 10 }), async (q, r) => {
+    const inp = cleanInput(q.body), fmt = q.body?.format === 'docx' ? 'docx' : 'pdf';
+    if (!inp.text.trim()) return r.status(400).json({ error: 'text chahiye' });
+    try {
+      const buf = fmt === 'pdf' ? await makePdf(inp) : await makeDocx(inp);
+      r.set({ 'content-type': fmt === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'content-disposition': `attachment; filename="letter.${fmt}"` }).send(buf);
+    } catch (e) { console.error('[letterhead]', e.message); r.status(500).json({ error: 'File nahi ban payi, dobara try karo.' }); }
+  });
+  app.post('/api/letterhead/pdf-to-image', rateLimiter({ windowMs: 60_000, max: 10 }), async (q, r) => {
+    const b64 = String(q.body?.data || '').replace(/^data:application\/pdf;base64,/, '');
+    if (!/^[A-Za-z0-9+/=]+$/.test(b64) || b64.length > 9e6) return r.status(400).json({ error: 'Galat PDF' });
+    try { r.json({ image: await pdfToPng(Buffer.from(b64, 'base64')) }); } catch (e) { r.status(422).json({ error: 'PDF padh nahi paya. Image (PNG/JPG) upload karo.' }); }
+  });
   app.get('/api/health', (_q, r) => r.json({ ok: true }));
   app.get('/api/info', (_q, r) => r.json({ name: APP_NAME, developer: DEVELOPER, greeting: GREETING, keyConfigured: !!provider }));
   app.get('/api/files/:sid/:name', (req, res) => {

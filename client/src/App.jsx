@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import Admin from './Admin.jsx';
 import Markdown from './Markdown.jsx';
+import Letterhead from './Letterhead.jsx';
+import { splitDraft, isLetterheadRequest } from './draft.js';
+
+const CHIPS = ['Meeting notice likho', 'Application likho', 'Invitation banao', 'Speech likho', 'WhatsApp message likho'];
 
 const sid = localStorage.sid || (localStorage.sid = crypto.randomUUID());
 const Avatar = () => <div className="w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-cyan-400 to-violet-600 grid place-items-center text-lg">🤖</div>;
@@ -15,12 +19,17 @@ function Chat() {
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [lh, setLh] = useState(null);
   const end = useRef();
   useEffect(() => { fetch('/api/info').then(r => r.json()).then(setInfo).catch(() => {}); }, []);
   useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [msgs]);
 
-  async function send() {
-    const text = input.trim(); if (!text || busy) return;
+  async function send(override) {
+    const text = (typeof override === 'string' ? override : input).trim(); if (!text || busy) return;
+    if (isLetterheadRequest(text)) { // letterhead: server ko bheje bina modal kholo
+      const last = [...msgs].reverse().find(m => m.role === 'assistant' && m.content);
+      if (last) { setInput(''); return setLh((splitDraft(last.content)?.draft) || last.content); }
+    }
     const history = [...msgs, { role: 'user', content: text }];
     setMsgs([...history, { role: 'assistant', content: '', steps: [], files: [], media: [] }]); setInput(''); setBusy(true);
     const upd = f => setMsgs(m => { const c = [...m]; c[c.length - 1] = f({ ...c[c.length - 1] }); return c; });
@@ -53,21 +62,33 @@ function Chat() {
         <span className="text-[10px] uppercase tracking-wide bg-violet-600/30 text-violet-300 px-2 py-0.5 rounded-full">🤖 AI Assistant</span></div>
       </header>
       <main className="flex-1 overflow-y-auto p-3 space-y-3">
-        <Bubble ai text={info.greeting || `Namaste 🙏 Main ${info.name}, aapki kya help kar sakta hu?`} />
+        <Bubble ai text={info.greeting || `Namaste 🙏 Main ${info.name}, aapki kya help kar sakta hu?`} noActions />
+        {msgs.length === 0 && <div className="flex flex-wrap gap-2 pl-11">{CHIPS.map(c => <button key={c} onClick={() => send(c)} className="text-xs bg-slate-800 hover:bg-slate-700 border border-violet-500/40 text-violet-200 rounded-full px-3 py-1.5">{c}</button>)}</div>}
         {info.keyConfigured === false && <div className="text-xs text-amber-300 bg-amber-900/30 p-2 rounded">⚠️ API key missing — server pe GEMINI_API_KEY set karni hai.</div>}
-        {msgs.map((m, i) => <Bubble key={i} ai={m.role === 'assistant'} text={m.content} steps={m.steps} files={m.files} media={m.media} typing={busy && i === msgs.length - 1} />)}
+        {msgs.map((m, i) => <Bubble key={i} ai={m.role === 'assistant'} text={m.content} steps={m.steps} files={m.files} media={m.media} typing={busy && i === msgs.length - 1} onLetterhead={setLh} />)}
         <div ref={end} />
       </main>
       <form onSubmit={e => { e.preventDefault(); send(); }} className="p-3 flex gap-2 border-t border-slate-800">
         <input value={input} onChange={e => setInput(e.target.value)} placeholder="Kuch bhi pucho ya kaam do..." className="flex-1 bg-slate-800 rounded-full px-4 py-2 outline-none" />
         <button disabled={busy} className="bg-violet-600 disabled:opacity-50 rounded-full px-4">➤</button>
       </form>
+      {lh !== null && <Letterhead draft={lh} onClose={() => setLh(null)} />}
       <footer className="text-center text-[11px] text-slate-500 pb-2">Developer: {info.developer} · Yeh ek AI hai, galti kar sakta hai</footer>
     </div>
   );
 }
 
-function Bubble({ ai, text, steps = [], files = [], media = [], typing }) {
+function CopyBtn({ text }) {
+  const [ok, setOk] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); } catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+    setOk(true); setTimeout(() => setOk(false), 1500);
+  };
+  return <button onClick={copy} className="text-xs text-slate-400 hover:text-slate-100">{ok ? '✅ Copied' : '📋 Copy'}</button>;
+}
+
+function Bubble({ ai, text, steps = [], files = [], media = [], typing, noActions, onLetterhead }) {
+  const sp = ai && !typing ? splitDraft(text) : null;
   return (
     <div className={`flex gap-2 ${ai ? '' : 'justify-end'}`}>
       {ai && <Avatar />}
@@ -76,7 +97,14 @@ function Bubble({ ai, text, steps = [], files = [], media = [], typing }) {
           <div className="font-semibold">⚙️ Kaam ho raha hai...</div>
           {steps.map((s, i) => <div key={i}>{s.done ? '✅' : '⏳'} {toolLabel[s.tool] || s.tool}{s.args?.query ? `: ${s.args.query}` : s.args?.url ? `: ${s.args.url}` : ''}</div>)}
         </div>}
-        {text ? (ai ? <Markdown text={text} /> : text) : (typing && <span className="animate-pulse">...</span>)}
+        {text ? (ai ? (sp ? <>
+          {sp.intro && <Markdown text={sp.intro} />}
+          <div className="my-2 rounded-lg border border-slate-600 bg-slate-900/60 p-3"><Markdown text={sp.draft} /></div>
+          {sp.outro && <div className="text-slate-300"><Markdown text={sp.outro} /></div>}</> : <Markdown text={text} />) : text) : (typing && <span className="animate-pulse">...</span>)}
+        {ai && text && !typing && !noActions && <div className="mt-2 flex gap-3 items-center">
+          <CopyBtn text={sp ? sp.draft : text} />
+          {sp && <button onClick={() => onLetterhead?.(sp.draft)} className="text-xs text-cyan-300 hover:text-cyan-100">📄 Letterhead par banao</button>}
+        </div>}
         {media.map(m => <div key={m.url} className="mt-2">{m.kind === 'image' ? <img src={m.url} alt={m.name} className="rounded-lg w-full" /> : <audio controls src={m.url} className="w-full" />}<a href={m.url} download className="text-xs text-cyan-300 underline">⬇️ Download</a></div>)}
         {files.map(f => <a key={f.url} href={f.url} className="block mt-2 text-cyan-300 underline">⬇️ {f.name}</a>)}
       </div>
