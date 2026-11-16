@@ -68,7 +68,7 @@ function Chat() {
       <main className="flex-1 overflow-y-auto p-3 space-y-3">
         <Bubble ai text={info.greeting || `Namaste 🙏 Main ${info.name}, aapki kya help kar sakta hu?`} noActions />
         {msgs.length === 0 && <a href="/english" className="ml-11 block rounded-2xl bg-gradient-to-r from-orange-500 to-pink-500 p-3 text-white"><div className="font-semibold">📚 English Seekho (naya!)</div><div className="text-xs opacity-90">Zero se English seekho: roz lesson, quiz, bolne ki practice aur AI Teacher. Free.</div></a>}
-        {msgs.length === 0 && <div className="flex flex-wrap gap-2 pl-11">{CHIPS.map(c => <button key={c} onClick={() => send(c)} className="text-xs bg-slate-800 hover:bg-slate-700 border border-violet-500/40 text-violet-200 rounded-full px-3 py-1.5">{c}</button>)}</div>}
+        {msgs.length === 0 && <div className="flex flex-wrap gap-2 pl-11"><a href="/english/baat" className="text-xs bg-rose-600 hover:bg-rose-500 text-white rounded-full px-3 py-1.5">🗣️ English bolke practice</a><a href="/english/prompter" className="text-xs bg-slate-100 text-slate-900 rounded-full px-3 py-1.5">📺 English teleprompter</a>{CHIPS.map(c => <button key={c} onClick={() => send(c)} className="text-xs bg-slate-800 hover:bg-slate-700 border border-violet-500/40 text-violet-200 rounded-full px-3 py-1.5">{c}</button>)}</div>}
         {info.keyConfigured === false && <div className="text-xs text-amber-300 bg-amber-900/30 p-2 rounded">⚠️ API key missing — server pe GEMINI_API_KEY set karni hai.</div>}
         {msgs.map((m, i) => <Bubble key={i} ai={m.role === 'assistant'} text={m.content} steps={m.steps} files={m.files} media={m.media} typing={busy && i === msgs.length - 1} onLetterhead={setLh} />)}
         <div ref={end} />

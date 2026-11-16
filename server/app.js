@@ -7,7 +7,7 @@ import { runAgent } from './agent.js';
 import { providerFromEnv } from './providers.js';
 import { listDocs, saveDoc, deleteDoc } from './kb.js';
 import { timingSafeEqual } from 'node:crypto';
-import { teacherReply, TEACHER_MODES } from './english.js';
+import { teacherReply, TEACHER_MODES, generateDialogue, generatePassage } from './english.js';
 import { cleanInput, makePdf, makeDocx, pdfToPng, DEFAULT_ORG } from './letter.js';
 
 export function rateLimiter({ windowMs, max }) {
@@ -62,6 +62,24 @@ export function createApp({ provider = providerFromEnv(), tools, fetchImpl } = {
       if (e.status === 400) return r.status(400).json({ error: 'Kuch likho toh sahi 🙂' });
       console.error('[english] teacher error:', e.message);
       r.status(502).json({ error: 'Teacher abhi busy hai 🙏 1 minute baad dobara bhejo.' });
+    }
+  });
+  app.post('/api/english/dialogue', rateLimiter({ windowMs: 60_000, max: 6 }), async (q, r) => {
+    if (!provider) return r.status(503).json({ error: 'AI abhi band hai. Neeche wali ready conversations practice karo.' });
+    try { r.json({ dialogue: await generateDialogue(provider, q.body?.situation) }); }
+    catch (e) {
+      if (e.status === 400) return r.status(400).json({ error: 'Situation likho, jaise "salon mein baal katwana" 🙂' });
+      console.error('[english] dialogue error:', e.message);
+      r.status(502).json({ error: 'Conversation abhi nahi ban payi 🙏 Thodi der baad dobara try karo, ya ready wali conversation practice karo.' });
+    }
+  });
+  app.post('/api/english/passage', rateLimiter({ windowMs: 60_000, max: 6 }), async (q, r) => {
+    if (!provider) return r.status(503).json({ error: 'AI abhi band hai. Ready passages padho ya apna text daalo.' });
+    try { r.json({ passage: await generatePassage(provider, q.body?.topic) }); }
+    catch (e) {
+      if (e.status === 400) return r.status(400).json({ error: 'Topic likho, jaise "Ganpati festival" 🙂' });
+      console.error('[english] passage error:', e.message);
+      r.status(502).json({ error: 'Passage abhi nahi ban paya 🙏 Thodi der baad dobara try karo, ya ready passage padho.' });
     }
   });
   app.get('/api/health', (_q, r) => r.json({ ok: true }));

@@ -3,10 +3,11 @@ import Markdown from '../Markdown.jsx';
 import { LESSONS, LEVELS, buildQuiz, scoreSpeech } from './lessons.js';
 import * as P from './progress.js';
 import { speak, listen, canListen, canSpeak, englishOnly } from './speech.js';
+import { BASE, go, Top, Btn, Listen } from './ui.jsx';
+import { ConvList, ConvPlay } from './Conversation.jsx';
+import { PrompterList, Prompter } from './Prompter.jsx';
 
-const BASE = '/english';
-const go = path => { history.pushState(null, '', BASE + path); dispatchEvent(new PopStateEvent('popstate')); window.scrollTo(0, 0); };
-const route = () => { const p = location.pathname.slice(BASE.length).replace(/\/+$/, ''); const m = p.match(/^\/lesson\/(\d+)/); return m ? { name: 'lesson', id: +m[1] } : p === '/teacher' ? { name: 'teacher' } : p === '/revise' ? { name: 'revise' } : { name: 'home' }; };
+const route = () => { const p = location.pathname.slice(BASE.length).replace(/\/+$/, ''); const m = p.match(/^\/lesson\/(\d+)/), c = p.match(/^\/baat\/([\w-]+)/), t = p.match(/^\/prompter\/([\w-]+)/); return m ? { name: 'lesson', id: +m[1] } : t ? { name: 'tp', id: t[1] } : p === '/prompter' ? { name: 'tps' } : c ? { name: 'conv', id: c[1] } : p === '/baat' ? { name: 'convs' } : p === '/teacher' ? { name: 'teacher' } : p === '/revise' ? { name: 'revise' } : { name: 'home' }; };
 
 function useProgress() {
   const [p, setP] = useState(() => P.load());
@@ -25,32 +26,19 @@ export default function English() {
   }, []);
   return (
     <div className="min-h-[100dvh] bg-amber-50 text-slate-800 text-[17px]">
-      <div className={`max-w-xl mx-auto ${r.name === 'teacher' ? '' : 'pb-10'}`}>
+      <div className={`max-w-xl mx-auto ${['teacher', 'conv', 'tp'].includes(r.name) ? '' : 'pb-10'}`}>
         {r.name === 'lesson' ? <Lesson key={r.id} id={r.id} p={p} update={update} />
           : r.name === 'teacher' ? <Teacher update={update} />
           : r.name === 'revise' ? <Revise p={p} update={update} />
+          : r.name === 'convs' ? <ConvList p={p} />
+          : r.name === 'tps' ? <PrompterList p={p} />
+          : r.name === 'tp' ? <Prompter key={r.id} id={r.id} update={update} />
+          : r.name === 'conv' ? <ConvPlay key={r.id} id={r.id} update={update} />
           : <Home p={p} />}
       </div>
     </div>
   );
 }
-
-function Top({ title, back = true }) {
-  return (
-    <header className="sticky top-0 z-10 bg-gradient-to-r from-orange-500 to-pink-500 text-white px-3 py-3 flex items-center gap-3 shadow">
-      {back ? <button onClick={() => go('')} className="text-2xl w-10 h-10 rounded-full bg-white/20 active:bg-white/40" aria-label="Back">←</button>
-        : <div className="w-10 h-10 rounded-full bg-white grid place-items-center text-2xl">📚</div>}
-      <div className="flex-1 min-w-0">
-        <div className="font-bold text-lg leading-tight truncate">{title}</div>
-        <div className="text-[11px] opacity-90">English Seekho by Aditya Solanki AI · 🤖 AI</div>
-      </div>
-    </header>
-  );
-}
-
-const Btn = ({ className = '', ...a }) => <button {...a} className={`rounded-2xl font-semibold active:scale-[.98] transition disabled:opacity-50 ${className}`} />;
-const Listen = ({ text, slow, small }) => <button onClick={() => speak(text, { slow })} aria-label="Suno"
-  className={`${small ? 'text-sm px-2 py-1' : 'px-3 py-2'} rounded-full bg-sky-100 text-sky-800 active:bg-sky-200 shrink-0`}>{slow ? '🐢' : '🔊'}</button>;
 
 function Home({ p }) {
   const [install, setInstall] = useState(null);
@@ -73,6 +61,16 @@ function Home({ p }) {
       <Btn onClick={() => go(`/lesson/${next.id}`)} className="w-full bg-orange-500 text-white p-4 text-left shadow">
         <div className="text-sm opacity-90">{doneN ? '▶️ Aaj ka lesson' : '▶️ Pehla lesson shuru karo'}</div>
         <div className="text-xl">{next.emoji} Lesson {next.id}: {next.title}</div>
+      </Btn>
+      <Btn onClick={() => go('/baat')} className="w-full bg-gradient-to-r from-rose-500 to-fuchsia-600 text-white p-4 text-left shadow">
+        <div className="flex items-center gap-3"><span className="text-4xl">🗣️</span><span>
+          <span className="block text-xl">Bolke Practice (naya!)</span>
+          <span className="block text-sm font-normal opacity-90">Hotel mein khana order, dukaan, doctor... Aditya ki line aap bolo, baaki app bolega</span></span></div>
+      </Btn>
+      <Btn onClick={() => go('/prompter')} className="w-full bg-slate-900 text-white p-4 text-left shadow">
+        <div className="flex items-center gap-3"><span className="text-4xl">📺</span><span>
+          <span className="block text-xl">Teleprompter (news reader jaisa)</span>
+          <span className="block text-sm font-normal opacity-90">Bade akshar khud aage badhte hain, aap padhte jao. Mic se score bhi.</span></span></div>
       </Btn>
       <div className="grid grid-cols-2 gap-3">
         <Btn onClick={() => go('/teacher')} className="bg-violet-600 text-white p-4 text-left"><div className="text-3xl">🤖</div>AI Teacher se baat karo</Btn>

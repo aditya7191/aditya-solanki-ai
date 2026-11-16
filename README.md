@@ -47,3 +47,9 @@ Beginner English course for Hindi/Hinglish speakers, inside the same app (no ext
 - AI Teacher: `POST /api/english/teacher` `{mode, messages}` → `{reply}`; modes free/shop/phone/meeting/interview; same Gemini → Groq → Pollinations chain
 - Progress (XP, streak, lessons, words, flashcard boxes) in localStorage: `client/src/english/progress.js`
 - PWA: `/es/manifest.webmanifest`, `/sw.js` (scope `/english`, never caches `/api/`)
+
+### Bolke Practice (`/english/baat`)
+15 scripted Aditya-vs-character dialogues (`client/src/english/dialogues.js`), teleprompter-style chat playback: other side auto-spoken, user's line big with karaoke, 🎤 score (reuses `scoreSpeech`), Auto / Bolke / Sirf padho modes, slow toggle, Role badlo, end score + XP. `POST /api/english/dialogue {situation}` makes a new one with the AI (JSON parsed/repaired/validated, 1 retry).
+
+### Teleprompter (`/english/prompter`)
+TV news-reader mode: big auto-advancing text (speed presets + 40-180 wpm slider), karaoke word, pause/play, font size, Hindi meaning bar, optional 🎤 mic-follow (continuous SpeechRecognition, `followWords`) with end score. 12 passages (`passages.js`), conversation lines (`/english/prompter/conv-<id>-A`), paste own text, or `POST /api/english/passage {topic}`.
