@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import Admin from './Admin.jsx';
 import Markdown from './Markdown.jsx';
 import Letterhead from './Letterhead.jsx';
@@ -10,7 +10,10 @@ const sid = localStorage.sid || (localStorage.sid = crypto.randomUUID());
 const Avatar = () => <div className="w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-cyan-400 to-violet-600 grid place-items-center text-lg">🤖</div>;
 const toolLabel = { web_search: '🔎 Search kar raha hu', fetch_url: '🌐 Page padh raha hu', run_code: '💻 Code chala raha hu', create_file: '📄 File bana raha hu', search_knowledge: '📚 Samaj KB dekh raha hu', generate_image: '🎨 Image bana raha hu', generate_logo: '✏️ Logo bana raha hu', generate_music: '🎵 Music bana raha hu' };
 
+const English = lazy(() => import('./english/English.jsx'));
+
 export default function App() {
+  if (location.pathname.startsWith('/english')) return <Suspense fallback={<div className="min-h-[100dvh] bg-amber-50 grid place-items-center text-2xl">📚 English Seekho...</div>}><English /></Suspense>;
   return location.pathname.startsWith('/admin') ? <Admin /> : <Chat />;
 }
 
@@ -22,7 +25,7 @@ function Chat() {
   const [lh, setLh] = useState(null);
   const end = useRef();
   useEffect(() => { fetch('/api/info').then(r => r.json()).then(setInfo).catch(() => {}); }, []);
-  useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [msgs]);
+  useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs]);
 
   async function send(override) {
     const text = (typeof override === 'string' ? override : input).trim(); if (!text || busy) return;
@@ -60,9 +63,11 @@ function Chat() {
       <header className="flex items-center gap-3 p-3 border-b border-slate-800">
         <Avatar /><div><div className="font-semibold">{info.name}</div>
         <span className="text-[10px] uppercase tracking-wide bg-violet-600/30 text-violet-300 px-2 py-0.5 rounded-full">🤖 AI Assistant</span></div>
+        <a href="/english" className="ml-auto text-sm font-semibold bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-full px-3 py-1.5">📚 English Seekho</a>
       </header>
       <main className="flex-1 overflow-y-auto p-3 space-y-3">
         <Bubble ai text={info.greeting || `Namaste 🙏 Main ${info.name}, aapki kya help kar sakta hu?`} noActions />
+        {msgs.length === 0 && <a href="/english" className="ml-11 block rounded-2xl bg-gradient-to-r from-orange-500 to-pink-500 p-3 text-white"><div className="font-semibold">📚 English Seekho (naya!)</div><div className="text-xs opacity-90">Zero se English seekho: roz lesson, quiz, bolne ki practice aur AI Teacher. Free.</div></a>}
         {msgs.length === 0 && <div className="flex flex-wrap gap-2 pl-11">{CHIPS.map(c => <button key={c} onClick={() => send(c)} className="text-xs bg-slate-800 hover:bg-slate-700 border border-violet-500/40 text-violet-200 rounded-full px-3 py-1.5">{c}</button>)}</div>}
         {info.keyConfigured === false && <div className="text-xs text-amber-300 bg-amber-900/30 p-2 rounded">⚠️ API key missing — server pe GEMINI_API_KEY set karni hai.</div>}
         {msgs.map((m, i) => <Bubble key={i} ai={m.role === 'assistant'} text={m.content} steps={m.steps} files={m.files} media={m.media} typing={busy && i === msgs.length - 1} onLetterhead={setLh} />)}

@@ -47,7 +47,7 @@ export async function run_code({ language = 'javascript', code }) {
     const file = path.join(dir, py ? 'main.py' : 'main.mjs');
     await writeFile(file, code);
     const cmd = py ? ['python3', '-I', file]
-      : ['node', '--experimental-permission', `--allow-fs-read=${dir}`, `--allow-fs-write=${dir}`, '--max-old-space-size=128', file];
+      : ['node', Number(process.versions.node.split('.')[0]) >= 24 ? '--permission' : '--experimental-permission', `--allow-fs-read=${dir}`, `--allow-fs-write=${dir}`, '--max-old-space-size=128', file];
     const full = [...sandboxPrefix(), ...cmd];
     return await new Promise(resolve => {
       const p = spawn(full[0], full.slice(1), { cwd: dir, env: { PATH: process.env.PATH, HOME: dir }, timeout: config.codeTimeoutMs, killSignal: 'SIGKILL' });

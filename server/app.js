@@ -1,12 +1,13 @@
 import express from 'express';
 import path from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { APP_NAME, DEVELOPER, GREETING, config } from './config.js';
 import { runAgent } from './agent.js';
 import { providerFromEnv } from './providers.js';
 import { listDocs, saveDoc, deleteDoc } from './kb.js';
 import { timingSafeEqual } from 'node:crypto';
+import { teacherReply, TEACHER_MODES } from './english.js';
 import { cleanInput, makePdf, makeDocx, pdfToPng, DEFAULT_ORG } from './letter.js';
 
 export function rateLimiter({ windowMs, max }) {
@@ -53,6 +54,16 @@ export function createApp({ provider = providerFromEnv(), tools, fetchImpl } = {
     if (!/^[A-Za-z0-9+/=]+$/.test(b64) || b64.length > 9e6) return r.status(400).json({ error: 'Galat PDF' });
     try { r.json({ image: await pdfToPng(Buffer.from(b64, 'base64')) }); } catch (e) { r.status(422).json({ error: 'PDF padh nahi paya. Image (PNG/JPG) upload karo.' }); }
   });
+  app.get('/api/english/modes', (_q, r) => r.json(Object.fromEntries(Object.entries(TEACHER_MODES).map(([k, v]) => [k, v.label]))));
+  app.post('/api/english/teacher', rateLimiter(config.rateLimit), async (q, r) => {
+    if (!provider) return r.status(503).json({ error: 'AI teacher abhi band hai (server pe API key nahi). Lessons aur quiz chalte rahenge.' });
+    try { r.json(await teacherReply(provider, { messages: q.body?.messages, mode: String(q.body?.mode || 'free') })); }
+    catch (e) {
+      if (e.status === 400) return r.status(400).json({ error: 'Kuch likho toh sahi 🙂' });
+      console.error('[english] teacher error:', e.message);
+      r.status(502).json({ error: 'Teacher abhi busy hai 🙏 1 minute baad dobara bhejo.' });
+    }
+  });
   app.get('/api/health', (_q, r) => r.json({ ok: true }));
   app.get('/api/info', (_q, r) => r.json({ name: APP_NAME, developer: DEVELOPER, greeting: GREETING, keyConfigured: !!provider }));
   app.get('/api/files/:sid/:name', (req, res) => {
@@ -85,6 +96,17 @@ export function createApp({ provider = providerFromEnv(), tools, fetchImpl } = {
     res.end();
   });
   const dist = new URL('../dist/', import.meta.url).pathname;
-  if (existsSync(dist)) { app.use(express.static(dist)); app.get('*', (_q, r) => r.sendFile(path.join(dist, 'index.html'))); }
+  if (existsSync(dist)) {
+    // English Seekho: alag PWA (apna manifest, theme, icon) usi index.html se
+    let esHtml;
+    app.get(['/english', '/english/*'], (_q, r) => {
+      esHtml ??= readFileSync(path.join(dist, 'index.html'), 'utf8')
+        .replace('<title>Aditya Solanki AI</title>', '<title>English Seekho by Aditya Solanki AI</title>')
+        .replace('</head>', '<link rel="manifest" href="/es/manifest.webmanifest"/><meta name="theme-color" content="#f97316"/><link rel="apple-touch-icon" href="/es/apple-touch-icon.png"/><link rel="icon" href="/es/icon-192.png"/><meta name="description" content="English Seekho by Aditya Solanki AI: zero se English, Hindi mein samjhaake. Free."/></head>');
+      r.set('cache-control', 'no-cache').type('html').send(esHtml);
+    });
+    app.get('/sw.js', (_q, r) => r.set({ 'cache-control': 'no-cache', 'service-worker-allowed': '/' }).sendFile(path.join(dist, 'sw.js')));
+    app.use(express.static(dist)); app.get('*', (_q, r) => r.sendFile(path.join(dist, 'index.html')));
+  }
   return app;
 }

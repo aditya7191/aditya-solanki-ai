@@ -39,3 +39,11 @@ Docker web service banao, env mein `GEMINI_API_KEY` daalo. Dockerfile ready hai.
 ## Image / Logo / Music
 - Image + logo (2-4 variants): Pollinations.ai, key nahi chahiye. Limit: `IMAGE_DAILY_LIMIT` (default 20/IP/din). Unsafe prompts refuse.
 - Music: Hugging Face MusicGen, `HF_TOKEN` chahiye (free: huggingface.co/settings/tokens). Na ho toh app bata deta hai. Limit `MUSIC_DAILY_LIMIT` (default 5).
+
+## English Seekho (`/english`)
+Beginner English course for Hindi/Hinglish speakers, inside the same app (no extra service, free).
+- 32 lessons (Level 0-3), 5 words + 3-5 sentences + Hinglish tip + auto quiz (MCQ, fill-blank, Hindi→English): `client/src/english/lessons.js`
+- 🔊 Listen (browser speechSynthesis, en-IN) and 🎤 speaking check (browser SpeechRecognition, best on Android Chrome)
+- AI Teacher: `POST /api/english/teacher` `{mode, messages}` → `{reply}`; modes free/shop/phone/meeting/interview; same Gemini → Groq → Pollinations chain
+- Progress (XP, streak, lessons, words, flashcard boxes) in localStorage: `client/src/english/progress.js`
+- PWA: `/es/manifest.webmanifest`, `/sw.js` (scope `/english`, never caches `/api/`)
